@@ -49,6 +49,12 @@
     .success-wrap .check { font-size:80px; margin-bottom:20px; }
     .success-wrap p { font-size:30px; font-weight:700; color:#1a1a1a; }
 
+    /* 로딩 화면 */
+    .loading-wrap { display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100vh; background:#fff; }
+    .loading-wrap p { font-size:28px; color:#888; margin-top:20px; }
+    .spinner { width:60px; height:60px; border:5px solid #f0f0f0; border-top-color:#FFD700; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
     /* 로그인 화면 */
     .login-wrap { display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100vh; padding:48px 32px; background:#fff; }
     .login-logo { font-size:100px; margin-bottom:32px; }
@@ -153,32 +159,54 @@
     document.getElementById('installBanner').classList.remove('show');
   }
 
-  // 카카오 OAuth 처리
+  // ─── 앱 시작 ───────────────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
   const code = urlParams.get('code');
 
   if (code) {
-    // 토큰 발급 → Apps Script 통해서 처리
-    fetch(SCRIPT_URL + '?code=' + code)
-      .then(r => r.text())
-      .then(html => {
-        // kakaoId, name 파라미터 추출
-        const match = html.match(/kakaoId.*?'(\d+)'/) || html.match(/kakaoId = '(\d+)'/);
-        const nameMatch = html.match(/name = '([^']+)'/);
-        if (match) {
-          kakaoId = match[1];
+    // 카카오 로그인 후 돌아온 경우 → 로딩 화면 먼저 표시
+    renderLoading();
+
+    // Apps Script에 code 전달 → JSON으로 kakaoId, name 받기
+    fetch(SCRIPT_URL + '?action=kakaoLogin&code=' + encodeURIComponent(code) + '&redirect_uri=' + encodeURIComponent(REDIRECT_URI))
+      .then(r => r.json())
+      .then(data => {
+        if (data.kakaoId) {
+          kakaoId = String(data.kakaoId);
+          userName = data.name || '회원';
           localStorage.setItem('kakaoId', kakaoId);
-        }
-        if (nameMatch) {
-          userName = nameMatch[1];
           localStorage.setItem('userName', userName);
+          // URL에서 code 파라미터 제거 후 마이페이지 이동
+          window.history.replaceState({}, document.title, REDIRECT_URI);
+          renderMyPage();
+        } else {
+          // 로그인 실패
+          alert('로그인에 실패했어요. 다시 시도해주세요.\n' + (data.error || ''));
+          localStorage.removeItem('kakaoId');
+          localStorage.removeItem('userName');
+          renderLogin();
         }
-        window.location.href = REDIRECT_URI;
+      })
+      .catch(err => {
+        alert('오류가 발생했어요: ' + err.message);
+        renderLogin();
       });
+
   } else if (kakaoId && userName) {
     renderMyPage();
   } else {
     renderLogin();
+  }
+
+  // ─── 화면 렌더링 함수들 ────────────────────────────────
+
+  function renderLoading() {
+    document.getElementById('app').innerHTML = `
+      <div class="loading-wrap">
+        <div class="spinner"></div>
+        <p>로그인 중...</p>
+      </div>
+    `;
   }
 
   function renderLogin() {
@@ -199,13 +227,26 @@
 
   function renderMyPage() {
     fetch(SCRIPT_URL + '?action=mypage&kakaoId=' + kakaoId + '&name=' + encodeURIComponent(userName))
-      .then(r => r.text())
-      .then(html => {
-        // Apps Script에서 약 목록 HTML 파싱
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const medList = doc.getElementById('medList');
-        const medsHtml = medList ? medList.innerHTML : '<div class="empty"><div style="font-size:64px;margin-bottom:20px">📋</div><div>등록된 약이 없어요</div></div>';
+      .then(r => r.json())
+      .then(data => {
+        let medsHtml = '';
+        if (data.meds && data.meds.length > 0) {
+          medsHtml = data.meds.map(m => `
+            <div class="med-card">
+              <div class="med-top">
+                <div class="med-name">${m.medName}</div>
+                <div class="med-time-badge">${m.times}</div>
+              </div>
+              <div class="med-date">${m.startDate} ~ ${m.endDate}</div>
+              <div class="med-btns">
+                <button class="btn-edit" onclick="startEdit(${m.rowNum}, '${m.medName}', '${m.times}', '${m.startDate}', '${m.endDate}')">수정</button>
+                <button class="btn-del" onclick="deleteMed(${m.rowNum}, '${m.medName}')">삭제</button>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          medsHtml = '<div class="empty"><div style="font-size:64px;margin-bottom:20px">📋</div><div>등록된 약이 없어요</div></div>';
+        }
 
         const today = new Date().toISOString().split('T')[0];
         const endDef = new Date(); endDef.setDate(endDef.getDate()+7);
@@ -252,6 +293,13 @@
                 <p>등록 완료!</p>
               </div>
             </div>
+          </div>
+        `;
+      })
+      .catch(err => {
+        document.getElementById('app').innerHTML = `
+          <div class="loading-wrap">
+            <p style="color:#cc0000">오류: ${err.message}</p>
           </div>
         `;
       });
