@@ -419,14 +419,18 @@
   function takeMed(rowNum, medName) {
     const btn = document.getElementById('take_' + rowNum);
     if (btn.classList.contains('done')) return;
-    // 즉시 UI 반응 (서버 응답 기다리지 않음)
+    // 즉시 UI 반응
     btn.classList.add('done');
     btn.textContent = '✅ 복용 완료!';
-    const today = new Date();
-    const kst = new Date(today.getTime() + (9 * 60 * 60 * 1000));
-    const dateStr = kst.toISOString().split('T')[0];
-    const timeStr = kst.toISOString().split('T')[1].substring(0,5);
-    fetch(SCRIPT_URL + '?action=confirm&kakaoId=' + kakaoId + '&rowNum=' + rowNum + '&medName=' + encodeURIComponent(medName) + '&date=' + dateStr + '&times=' + timeStr)
+    // 날짜를 KST 기준으로 직접 계산
+    const now = new Date();
+    const kstOffset = 9 * 60 * 60 * 1000;
+    const kst = new Date(now.getTime() + kstOffset);
+    const y = kst.getUTCFullYear();
+    const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(kst.getUTCDate()).padStart(2, '0');
+    const dateStr = y + '-' + m + '-' + d;
+    fetch(SCRIPT_URL + '?action=confirm&kakaoId=' + kakaoId + '&rowNum=' + rowNum + '&medName=' + encodeURIComponent(medName) + '&date=' + dateStr)
       .catch(() => {
         btn.classList.remove('done');
         btn.textContent = '💊 복용 완료';
