@@ -108,10 +108,17 @@
     .cal-day-label:last-child { color:#007aff; }
     .cal-cell { text-align:center; padding:6px 0; font-size:14px; border-radius:50%; position:relative; }
     .cal-cell.today { background:#1a1a1a; color:#FFD700; font-weight:800; border-radius:50%; }
-    .cal-cell.done { color:#2e7d32; font-weight:700; }
-    .cal-cell.done::after { content:'✅'; font-size:8px; position:absolute; bottom:0; left:50%; transform:translateX(-50%); }
     .cal-cell.empty { color:#ccc; }
-    .cal-legend { display:flex; gap:16px; margin-top:12px; justify-content:flex-end; font-size:12px; color:#888; }
+    .cal-cell { cursor:pointer; }
+    .cal-dot { font-size:9px; line-height:1; }
+    .cal-count { font-size:9px; color:#888; }
+    .cal-legend { display:flex; gap:12px; margin-top:12px; justify-content:flex-end; font-size:12px; color:#888; }
+
+    /* 날짜 상세 팝업 */
+    .day-detail { background:#fff; border-radius:16px; margin-top:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+    .day-detail-title { font-size:16px; font-weight:800; margin-bottom:12px; color:#1a1a1a; }
+    .day-detail-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f0f0f0; font-size:14px; }
+    .day-detail-item:last-child { border-bottom:none; }
 
     /* 복용 기록 탭 */
     .record-section { padding:12px; }
@@ -443,18 +450,24 @@
       .catch(() => renderCalendar(date, []));
   }
 
+  let currentLogs = [];
+
   function renderCalendar(date, logs) {
+    currentLogs = logs;
     const year = date.getFullYear();
     const month = date.getMonth();
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    // 복용 날짜 목록
-    const doneDates = new Set(logs.map(l => l.date));
+    // 날짜별 복용 기록 그룹화
+    const dateMap = {};
+    logs.forEach(l => {
+      if (!dateMap[l.date]) dateMap[l.date] = [];
+      dateMap[l.date].push(l.medName);
+    });
 
     const firstDay = new Date(year, month, 1).getDay();
     const lastDate = new Date(year, month + 1, 0).getDate();
-
     const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
     let cells = '';
@@ -462,8 +475,15 @@
     for (let d = 1; d <= lastDate; d++) {
       const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
       const isToday = dateStr === todayStr;
-      const isDone = doneDates.has(dateStr);
-      cells += `<div class="cal-cell ${isToday ? 'today' : ''} ${isDone ? 'done' : ''}">${d}</div>`;
+      const dayLogs = dateMap[dateStr] || [];
+      const count = dayLogs.length;
+
+      let dot = '';
+      if (count > 0) {
+        dot = `<div class="cal-dot">🟢</div><div class="cal-count">${count}개</div>`;
+      }
+
+      cells += `<div class="cal-cell ${isToday ? 'today' : ''}" onclick="showDayDetail('${dateStr}')" style="display:flex;flex-direction:column;align-items:center;padding:4px 0;">${d}${dot}</div>`;
     }
 
     document.getElementById('calendarWrap').innerHTML = `
@@ -483,9 +503,37 @@
           <div class="cal-day-label">토</div>
           ${cells}
         </div>
-        <div class="cal-legend">✅ 복용 완료</div>
+        <div class="cal-legend">🟢 복용 완료 &nbsp; 날짜 탭하면 상세 확인</div>
       </div>
+      <div id="dayDetail"></div>
     `;
+  }
+
+  function showDayDetail(dateStr) {
+    const dayLogs = currentLogs.filter(l => l.date === dateStr);
+    const detailEl = document.getElementById('dayDetail');
+    if (!detailEl) return;
+
+    if (dayLogs.length === 0) {
+      detailEl.innerHTML = `
+        <div class="day-detail">
+          <div class="day-detail-title">📅 ${dateStr}</div>
+          <div style="color:#aaa;font-size:14px;text-align:center;padding:16px 0;">복용 기록이 없어요</div>
+        </div>`;
+      return;
+    }
+
+    const items = dayLogs.map(l => `
+      <div class="day-detail-item">
+        <span>💊 ${l.medName}</span>
+        <span style="color:#2e7d32;font-weight:700;">✅ 복용 완료</span>
+      </div>`).join('');
+
+    detailEl.innerHTML = `
+      <div class="day-detail">
+        <div class="day-detail-title">📅 ${dateStr} 복용 기록</div>
+        ${items}
+      </div>`;
   }
 
   function logout() {
