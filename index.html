@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    body { font-family:-apple-system,'Helvetica Neue',sans-serif; background:#f2f2f7; color:#1a1a1a; padding-bottom:60px; }
+    body { font-family:-apple-system,'Helvetica Neue',sans-serif; background:#f2f2f7; color:#1a1a1a; padding-bottom:80px; }
 
     .topbar { background:#fff; padding:36px 18px 16px; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; justify-content:space-between; }
     .app-title { font-size:28px; font-weight:800; letter-spacing:-1px; color:#1a1a1a; }
@@ -87,6 +87,36 @@
     .s-delete { background:#fff0f0; color:#cc0000; border:1px solid #ffcccc; }
     .del-desc { font-size:16px; color:#888; margin-bottom:20px; }
 
+    /* 하단 탭바 */
+    .tabbar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #e0e0e0; display:flex; z-index:100; }
+    .tab-btn { flex:1; padding:12px 0; border:none; background:none; font-size:11px; font-weight:600; color:#888; cursor:pointer; font-family:inherit; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .tab-btn.active { color:#1a1a1a; }
+    .tab-icon { font-size:22px; }
+
+    /* 복용 완료 버튼 */
+    .btn-take { flex:1; padding:12px 0; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; background:#e8f5e9; color:#2e7d32; }
+    .btn-take.done { background:#f0f0f0; color:#aaa; }
+
+    /* 달력 */
+    .calendar-wrap { background:#fff; border-radius:16px; margin:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+    .cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .cal-title { font-size:18px; font-weight:800; }
+    .cal-nav { background:none; border:none; font-size:20px; cursor:pointer; padding:4px 10px; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+    .cal-day-label { text-align:center; font-size:12px; font-weight:700; color:#888; padding:4px 0; }
+    .cal-day-label:first-child { color:#ff3b30; }
+    .cal-day-label:last-child { color:#007aff; }
+    .cal-cell { text-align:center; padding:6px 0; font-size:14px; border-radius:50%; position:relative; }
+    .cal-cell.today { background:#1a1a1a; color:#FFD700; font-weight:800; border-radius:50%; }
+    .cal-cell.done { color:#2e7d32; font-weight:700; }
+    .cal-cell.done::after { content:'✅'; font-size:8px; position:absolute; bottom:0; left:50%; transform:translateX(-50%); }
+    .cal-cell.empty { color:#ccc; }
+    .cal-legend { display:flex; gap:16px; margin-top:12px; justify-content:flex-end; font-size:12px; color:#888; }
+
+    /* 복용 기록 탭 */
+    .record-section { padding:12px; }
+    .med-select { width:100%; padding:12px; border:1.5px solid #e0e0e0; border-radius:12px; font-size:16px; font-family:inherit; margin-bottom:12px; outline:none; background:#fff; }
+
     /* PWA 설치 배너 */
     .install-banner { display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a1a; color:#fff; padding:16px 20px; z-index:300; align-items:center; justify-content:space-between; }
     .install-banner.show { display:flex; }
@@ -140,6 +170,17 @@
     <button class="s-cancel" onclick="closeSheet('delete')">취소</button>
     <button class="s-delete" onclick="confirmDelete()">삭제</button>
   </div>
+</div>
+
+<div class="tabbar">
+  <button class="tab-btn active" id="tab-home" onclick="switchTab('home')">
+    <span class="tab-icon">💊</span>
+    <span>홈</span>
+  </button>
+  <button class="tab-btn" id="tab-record" onclick="switchTab('record')">
+    <span class="tab-icon">📅</span>
+    <span>기록</span>
+  </button>
 </div>
 
 <div class="install-banner" id="installBanner">
@@ -266,6 +307,9 @@
               </div>
               <div class="med-date">${m.startDate} ~ ${m.endDate}</div>
               ${m.days ? '<div class="med-days">📅 ' + m.days + '</div>' : ''}
+              <div class="med-btns" style="margin-bottom:8px;">
+                <button class="btn-take" id="take_${m.rowNum}" onclick="takeMed(${m.rowNum}, '${m.medName}')">💊 복용 완료</button>
+              </div>
               <div class="med-btns">
                 <button class="btn-edit" onclick="startEdit(${m.rowNum}, '${m.medName}', '${m.times}', '${m.startDate}', '${m.endDate}', '${m.days||''}')">수정</button>
                 <button class="btn-del" onclick="deleteMed(${m.rowNum}, '${m.medName}')">삭제</button>
@@ -349,6 +393,99 @@
           </div>
         `;
       });
+  }
+
+  // ===== 탭 전환 =====
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'home') renderMyPage();
+    if (tab === 'record') renderRecord();
+  }
+
+  // ===== 복용 완료 =====
+  function takeMed(rowNum, medName) {
+    const btn = document.getElementById('take_' + rowNum);
+    if (btn.classList.contains('done')) return;
+    const today = new Date().toISOString().split('T')[0];
+    fetch(SCRIPT_URL + '?action=confirm&kakaoId=' + kakaoId + '&rowNum=' + rowNum + '&times=' + today)
+      .then(r => r.json())
+      .then(() => {
+        btn.classList.add('done');
+        btn.textContent = '✅ 복용 완료!';
+      });
+  }
+
+  // ===== 기록 탭 =====
+  function renderRecord() {
+    document.getElementById('app').innerHTML = `
+      <div class="topbar">
+        <div class="app-title">💊 약톡</div>
+        <div class="topbar-right">
+          <div class="user-badge">${userName}님</div>
+          <button class="btn-logout" onclick="logout()">로그아웃</button>
+        </div>
+      </div>
+      <div class="record-section">
+        <div class="section-label" style="padding:8px 4px;">복용 기록</div>
+        <div id="calendarWrap"></div>
+      </div>
+    `;
+    loadCalendar(new Date());
+  }
+
+  function loadCalendar(date) {
+    fetch(SCRIPT_URL + '?action=getLogs&kakaoId=' + kakaoId)
+      .then(r => r.json())
+      .then(data => {
+        renderCalendar(date, data.logs || []);
+      })
+      .catch(() => renderCalendar(date, []));
+  }
+
+  function renderCalendar(date, logs) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // 복용 날짜 목록
+    const doneDates = new Set(logs.map(l => l.date));
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const lastDate = new Date(year, month + 1, 0).getDate();
+
+    const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+    let cells = '';
+    for (let i = 0; i < firstDay; i++) cells += '<div class="cal-cell empty"></div>';
+    for (let d = 1; d <= lastDate; d++) {
+      const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const isToday = dateStr === todayStr;
+      const isDone = doneDates.has(dateStr);
+      cells += `<div class="cal-cell ${isToday ? 'today' : ''} ${isDone ? 'done' : ''}">${d}</div>`;
+    }
+
+    document.getElementById('calendarWrap').innerHTML = `
+      <div class="calendar-wrap">
+        <div class="cal-header">
+          <button class="cal-nav" onclick="loadCalendar(new Date(${year}, ${month-1}, 1))">‹</button>
+          <div class="cal-title">${year}년 ${monthNames[month]}</div>
+          <button class="cal-nav" onclick="loadCalendar(new Date(${year}, ${month+1}, 1))">›</button>
+        </div>
+        <div class="cal-grid">
+          <div class="cal-day-label">일</div>
+          <div class="cal-day-label">월</div>
+          <div class="cal-day-label">화</div>
+          <div class="cal-day-label">수</div>
+          <div class="cal-day-label">목</div>
+          <div class="cal-day-label">금</div>
+          <div class="cal-day-label">토</div>
+          ${cells}
+        </div>
+        <div class="cal-legend">✅ 복용 완료</div>
+      </div>
+    `;
   }
 
   function logout() {
