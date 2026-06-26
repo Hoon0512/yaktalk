@@ -515,7 +515,15 @@
   }
 
   function showDayDetail(dateStr) {
-    const dayLogs = currentLogs.filter(l => l.date === dateStr);
+    // 중복 제거 - 같은 날 같은 약 이름은 한 번만 표시
+    const seen = new Set();
+    const dayLogs = currentLogs.filter(l => {
+      if (l.date === dateStr && !seen.has(l.medName)) {
+        seen.add(l.medName);
+        return true;
+      }
+      return false;
+    });
     const detailEl = document.getElementById('dayDetail');
     if (!detailEl) return;
 
