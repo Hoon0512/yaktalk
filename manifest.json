@@ -1,0 +1,22 @@
+{
+  "name": "약톡",
+  "short_name": "약톡",
+  "description": "카카오톡 복약 알림 서비스",
+  "start_url": "/yaktalk/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
