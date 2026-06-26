@@ -253,6 +253,11 @@
       .then(data => {
         let medsHtml = '';
         if (data.meds && data.meds.length > 0) {
+          data.meds.sort((a, b) => {
+            const aTime = a.times.split(',')[0].trim();
+            const bTime = b.times.split(',')[0].trim();
+            return aTime.localeCompare(bTime);
+          });
           medsHtml = data.meds.map(m => `
             <div class="med-card">
               <div class="med-top">
