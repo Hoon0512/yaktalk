@@ -112,8 +112,19 @@
   <input class="sheet-input" type="date" id="editStartDate">
   <div class="sheet-label">종료일</div>
   <input class="sheet-input" type="date" id="editEndDate">
-  <div class="sheet-label">복용 요일 (쉼표로 구분, 예: 월,수,금)</div>
-  <input class="sheet-input" type="text" id="editDays" placeholder="매일이면 빈칸, 예: 월,수,금">
+  <div class="sheet-label">복용 요일</div>
+  <div class="days-wrap" style="margin-bottom:8px;">
+    <button class="btn-everyday" id="editBtnEveryday" onclick="toggleEditEveryday()">매일</button>
+    <div class="days-row">
+      <button class="day-btn" data-day="월" onclick="toggleEditDay(this)">월</button>
+      <button class="day-btn" data-day="화" onclick="toggleEditDay(this)">화</button>
+      <button class="day-btn" data-day="수" onclick="toggleEditDay(this)">수</button>
+      <button class="day-btn" data-day="목" onclick="toggleEditDay(this)">목</button>
+      <button class="day-btn" data-day="금" onclick="toggleEditDay(this)">금</button>
+      <button class="day-btn" data-day="토" onclick="toggleEditDay(this)">토</button>
+      <button class="day-btn" data-day="일" onclick="toggleEditDay(this)">일</button>
+    </div>
+  </div>
   <div class="sheet-btns">
     <button class="s-cancel" onclick="closeSheet('edit')">취소</button>
     <button class="s-confirm" onclick="submitEdit()">저장</button>
@@ -398,13 +409,42 @@
     setTimeout(() => document.getElementById(type+'Overlay').classList.remove('on'), 300);
   }
 
+  function toggleEditEveryday() {
+    const btn = document.getElementById('editBtnEveryday');
+    const dayBtns = document.querySelectorAll('#editSheet .day-btn');
+    const isOn = btn.classList.toggle('on');
+    dayBtns.forEach(b => { if(isOn) b.classList.add('on'); else b.classList.remove('on'); });
+  }
+
+  function toggleEditDay(btn) {
+    btn.classList.toggle('on');
+    const allOn = document.querySelectorAll('#editSheet .day-btn.on').length === 7;
+    document.getElementById('editBtnEveryday').classList.toggle('on', allOn);
+  }
+
+  function getEditSelectedDays() {
+    const selected = Array.from(document.querySelectorAll('#editSheet .day-btn.on')).map(b => b.dataset.day);
+    if (selected.length === 7 || selected.length === 0) return '매일';
+    return selected.join(',');
+  }
+
   function startEdit(rowNum, medName, times, startDate, endDate, days) {
     document.getElementById('editRowNum').value = rowNum;
     document.getElementById('editMedName').value = medName;
     document.getElementById('editTimes').value = times;
     document.getElementById('editStartDate').value = startDate;
     document.getElementById('editEndDate').value = endDate;
-    document.getElementById('editDays').value = days === '매일' ? '' : (days || '');
+    // 요일 버튼 초기화
+    const dayBtns = document.querySelectorAll('#editSheet .day-btn');
+    dayBtns.forEach(b => b.classList.remove('on'));
+    document.getElementById('editBtnEveryday').classList.remove('on');
+    if (!days || days === '매일') {
+      document.getElementById('editBtnEveryday').classList.add('on');
+      dayBtns.forEach(b => b.classList.add('on'));
+    } else {
+      const selectedDays = days.split(',').map(d => d.trim());
+      dayBtns.forEach(b => { if(selectedDays.includes(b.dataset.day)) b.classList.add('on'); });
+    }
     openSheet('edit');
   }
 
@@ -414,8 +454,7 @@
     const times = document.getElementById('editTimes').value.trim();
     const startDate = document.getElementById('editStartDate').value;
     const endDate = document.getElementById('editEndDate').value;
-    const daysInput = document.getElementById('editDays').value.trim();
-    const days = daysInput || '매일';
+    const days = getEditSelectedDays();
     if (!medName) { alert('약 이름을 입력해주세요'); return; }
     fetch(SCRIPT_URL, { method:'POST', body: new URLSearchParams({action:'updateMedication',rowNum,medName,times,startDate,endDate,days}) })
       .then(() => { closeSheet('edit'); renderMyPage(); });
